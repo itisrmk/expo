@@ -1890,3 +1890,37 @@ it.each([
     expect(result.result.code).not.toContain('<View');
   }
 );
+
+it.each([
+  [
+    'a generic arrow',
+    '/app/src/generic.ts',
+    'export const identity = <T>(value: T) => value;',
+    '(value) => value',
+  ],
+  [
+    'an angle-bracket assertion',
+    '/app/src/assertion.ts',
+    'export const value = <string>input;',
+    'value = input',
+  ],
+])(
+  'does not parse %s in a .ts file as JSX when the React Compiler is enabled',
+  async (_name, filename, source, expected) => {
+    const result = await transformFileFullyWithNoxcturnal({
+      filename,
+      projectRoot: '/app',
+      source,
+      options: options({
+        experimentalImportSupport: false,
+        customTransformOptions: { engine: 'hermes', reactCompiler: 'true' },
+      }),
+      isDefaultExpoTransformer: true,
+      config: fullConfig(),
+    });
+    expect(result.status).toBe('complete');
+    if (result.status !== 'complete') return;
+    expect(result.result.code).toContain(expected);
+    expect(result.result.code).not.toMatch(/<T>|<string>/);
+  }
+);

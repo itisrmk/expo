@@ -704,7 +704,10 @@ function createReactCompilerPreflight(input: NoxcturnalTransformInput): Prefligh
       // defaults, matching Babel preset Expo's merged directive list.
       customOptOutDirectives: ['widget'],
     },
-    jsx: 'preserve',
+    // Any JSX mode makes Noxcturnal parse the file as JSX, including `.ts`.
+    // Preserve JSX only for the same extensions as the language phase.
+    // `<T>(value: T) => value` in a `.ts` file is a generic arrow.
+    ...(/\.(?:[cm]?js|jsx|tsx)$/.test(input.filename) ? { jsx: 'preserve' as const } : {}),
     comments: true,
     compact: false,
   };
