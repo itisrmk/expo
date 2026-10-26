@@ -152,3 +152,89 @@ describe('Schemes', () => {
     expect(hasScheme('myapp.test', manifest)).toBe(false);
   });
 });
+
+function setMainActivityLaunchMode(manifest: AndroidManifest, launchMode: string) {
+  const mainActivity = getMainActivity(manifest)!;
+  mainActivity.$['android:launchMode'] = launchMode;
+  return manifest;
+}
+
+function addRedirectSchemes(manifest: AndroidManifest, schemes: string[]) {
+  const mainActivity = getMainActivity(manifest)!;
+  mainActivity['intent-filter'] = [
+    ...(mainActivity['intent-filter'] ?? []),
+    {
+      action: [{ $: { 'android:name': 'android.intent.action.VIEW' } }],
+      category: [
+        { $: { 'android:name': 'android.intent.category.DEFAULT' } },
+        { $: { 'android:name': 'android.intent.category.BROWSABLE' } },
+      ],
+      data: schemes.map((scheme) => ({ $: { 'android:scheme': scheme } })),
+    },
+  ];
+  return manifest;
+}
+
+function readRedirectSchemes(manifest: AndroidManifest): string[] {
+  const mainActivity = getMainActivity(manifest)!;
+  return (mainActivity['intent-filter'] ?? []).flatMap((intentFilter) => {
+    const actions = intentFilter.action?.map((action) => action.$['android:name']) ?? [];
+    const categories = intentFilter.category?.map((category) => category.$['android:name']) ?? [];
+    if (
+      !actions.includes('android.intent.action.VIEW') ||
+      categories.includes('android.intent.category.LAUNCHER')
+    ) {
+      return [];
+    }
+    return (intentFilter.data ?? [])
+      .map((data) => data?.$?.['android:scheme'])
+      .filter((scheme): scheme is string => typeof scheme === 'string');
+  });
+}
+
+describe('singleTop MainActivity', () => {
+  it(`reads schemes from a singleTop MainActivity`, async () => {
+    const manifest = setMainActivityLaunchMode(await getFixtureManifestAsync(), 'singleTop');
+    addRedirectSchemes(manifest, ['repro', 'exp+repro']);
+
+    expect(getSchemesFromManifest(manifest)).toEqual(['repro', 'exp+repro']);
+  });
+
+  it(`adds a valid intent filter to a singleTop MainActivity`, async () => {
+    const manifest = setMainActivityLaunchMode(await getFixtureManifestAsync(), 'singleTop');
+
+    expect(ensureManifestHasValidIntentFilter(manifest)).toBe(true);
+    expect(readRedirectSchemes(manifest)).toEqual([]);
+    expect(
+      getMainActivity(manifest)!['intent-filter']?.some((intentFilter) => {
+        const actions = intentFilter.action?.map((action) => action.$['android:name']) ?? [];
+        const categories =
+          intentFilter.category?.map((category) => category.$['android:name']) ?? [];
+        return (
+          actions.includes('android.intent.action.VIEW') &&
+          categories.includes('android.intent.category.BROWSABLE') &&
+          !categories.includes('android.intent.category.LAUNCHER')
+        );
+      })
+    ).toBe(true);
+  });
+
+  it(`appends a scheme to a singleTop MainActivity`, async () => {
+    const manifest = setMainActivityLaunchMode(await getFixtureManifestAsync(), 'singleTop');
+
+    appendScheme('repro', manifest);
+
+    expect(readRedirectSchemes(manifest)).toEqual(['repro']);
+    expect(getSchemesFromManifest(manifest)).toEqual(['repro']);
+  });
+
+  it(`removes a scheme from a singleTop MainActivity`, async () => {
+    const manifest = setMainActivityLaunchMode(await getFixtureManifestAsync(), 'singleTop');
+    addRedirectSchemes(manifest, ['repro', 'exp+repro']);
+
+    removeScheme('repro', manifest);
+
+    expect(readRedirectSchemes(manifest)).toEqual(['exp+repro']);
+    expect(getSchemesFromManifest(manifest)).toEqual(['exp+repro']);
+  });
+});

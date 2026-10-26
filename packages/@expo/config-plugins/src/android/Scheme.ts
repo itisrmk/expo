@@ -41,7 +41,7 @@ export function setScheme(
   if (!ensureManifestHasValidIntentFilter(androidManifest)) {
     addWarningAndroid(
       'scheme',
-      `Cannot add schemes because the provided manifest does not have a valid Activity with \`android:launchMode="singleTask"\``,
+      `Cannot add schemes because the provided manifest does not have a valid Activity with \`android:launchMode="singleTask"\` or \`android:launchMode="singleTop"\``,
       'https://expo.fyi/setup-android-uri-scheme'
     );
     return androidManifest;
@@ -86,6 +86,12 @@ function propertiesFromIntentFilter(intentFilter: any): IntentFilterProps {
   };
 }
 
+// Libraries such as react-native-google-mobile-ads set MainActivity to singleTop instead of singleTask.
+function hasSchemeLaunchMode(activity?: ManifestActivity): boolean {
+  const launchMode = activity?.$?.['android:launchMode'];
+  return launchMode === 'singleTask' || launchMode === 'singleTop';
+}
+
 function getSingleTaskIntentFilters(androidManifest: AndroidManifest): any[] {
   if (!Array.isArray(androidManifest.manifest.application)) return [];
 
@@ -94,9 +100,7 @@ function getSingleTaskIntentFilters(androidManifest: AndroidManifest): any[] {
     const { activity } = application;
     // @ts-ignore
     const activities = Array.isArray(activity) ? activity : [activity];
-    const singleTaskActivities = (activities as ManifestActivity[]).filter(
-      (activity) => activity?.$?.['android:launchMode'] === 'singleTask'
-    );
+    const singleTaskActivities = (activities as ManifestActivity[]).filter(hasSchemeLaunchMode);
     for (const activity of singleTaskActivities) {
       const intentFilters = activity['intent-filter'];
       outputSchemes = outputSchemes.concat(intentFilters);
@@ -133,7 +137,7 @@ export function ensureManifestHasValidIntentFilter(androidManifest: AndroidManif
 
   for (const application of androidManifest.manifest.application) {
     for (const activity of application.activity || []) {
-      if (activity?.$?.['android:launchMode'] === 'singleTask') {
+      if (hasSchemeLaunchMode(activity)) {
         for (const intentFilter of activity['intent-filter'] || []) {
           // Parse valid intent filters...
           const properties = propertiesFromIntentFilter(intentFilter);
@@ -172,7 +176,7 @@ export function appendScheme(scheme: string, androidManifest: AndroidManifest): 
   if (!ensureManifestHasValidIntentFilter(androidManifest)) {
     addWarningAndroid(
       'scheme',
-      `Cannot add schemes because the provided manifest does not have a valid Activity with \`android:launchMode="singleTask"\``,
+      `Cannot add schemes because the provided manifest does not have a valid Activity with \`android:launchMode="singleTask"\` or \`android:launchMode="singleTop"\``,
       'https://expo.fyi/setup-android-uri-scheme'
     );
     return androidManifest;
@@ -180,7 +184,7 @@ export function appendScheme(scheme: string, androidManifest: AndroidManifest): 
 
   for (const application of androidManifest.manifest.application) {
     for (const activity of application.activity || []) {
-      if (activity?.$?.['android:launchMode'] === 'singleTask') {
+      if (hasSchemeLaunchMode(activity)) {
         for (const intentFilter of activity['intent-filter'] || []) {
           const properties = propertiesFromIntentFilter(intentFilter);
           if (isValidRedirectIntentFilter(properties)) {
@@ -204,7 +208,7 @@ export function removeScheme(scheme: string, androidManifest: AndroidManifest): 
 
   for (const application of androidManifest.manifest.application) {
     for (const activity of application.activity || []) {
-      if (activity?.$?.['android:launchMode'] === 'singleTask') {
+      if (hasSchemeLaunchMode(activity)) {
         for (const intentFilter of activity['intent-filter'] || []) {
           // Parse valid intent filters...
           const properties = propertiesFromIntentFilter(intentFilter);
