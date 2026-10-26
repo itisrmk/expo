@@ -1,8 +1,40 @@
+import ReactDOMServer from 'react-dom/server';
+
 import { serializeMetadataToReact, serializeMetadataToTags } from '../serialize';
 
 describe(serializeMetadataToTags, () => {
   it('returns empty array for empty metadata', () => {
     expect(serializeMetadataToTags({})).toEqual([]);
+  });
+
+  it('keeps the HTML hreflang attribute for language alternates', () => {
+    expect(
+      serializeMetadataToTags({
+        alternates: {
+          languages: {
+            en: 'https://example.dev/en',
+            'x-default': 'https://example.dev/',
+          },
+        },
+      })
+    ).toEqual([
+      {
+        tagName: 'link',
+        attributes: {
+          rel: 'alternate',
+          href: 'https://example.dev/en',
+          hreflang: 'en',
+        },
+      },
+      {
+        tagName: 'link',
+        attributes: {
+          rel: 'alternate',
+          href: 'https://example.dev/',
+          hreflang: 'x-default',
+        },
+      },
+    ]);
   });
 });
 
@@ -39,6 +71,41 @@ describe(serializeMetadataToReact, () => {
       <link key="metadata-link-0" rel="canonical" href="https://example.dev" />,
       <link key="metadata-link-1" rel="icon" href="/favicon.png" />,
     ]);
+  });
+
+  it('renders language alternates with the React hrefLang prop', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const nodes = serializeMetadataToReact({
+        alternates: {
+          languages: {
+            en: 'https://example.dev/en',
+            'x-default': 'https://example.dev/',
+          },
+        },
+      });
+
+      expect(nodes).toEqual([
+        <link key="metadata-link-0" rel="alternate" href="https://example.dev/en" hrefLang="en" />,
+        <link
+          key="metadata-link-1"
+          rel="alternate"
+          href="https://example.dev/"
+          hrefLang="x-default"
+        />,
+      ]);
+
+      expect(ReactDOMServer.renderToStaticMarkup(<>{nodes}</>)).toBe(
+        '<link rel="alternate" href="https://example.dev/en" hrefLang="en"/>' +
+          '<link rel="alternate" href="https://example.dev/" hrefLang="x-default"/>'
+      );
+
+      const hreflangWarnings = consoleError.mock.calls.filter((args) => args.includes('hreflang'));
+      expect(hreflangWarnings).toEqual([]);
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('renders OpenGraph property-based <meta> tags', () => {
