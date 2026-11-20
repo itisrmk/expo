@@ -15,12 +15,22 @@ export function writeFileAtomicSync(
   data: string | Buffer,
   options: WriteFileAtomicOptions = {}
 ): void {
+  let mode = options.mode;
+  if (mode === undefined) {
+    try {
+      const stat = fs.lstatSync(filename);
+      mode = stat.isFile() ? stat.mode : undefined;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
   const tmpfile = getTarget(filename, data);
-  fs.writeFileSync(tmpfile, data, options.mode !== undefined ? { mode: options.mode } : undefined);
+  fs.writeFileSync(tmpfile, data, mode !== undefined ? { mode } : undefined);
   fs.renameSync(tmpfile, filename);
-  // rename preserves any pre-existing destination mode; chmod after to enforce the requested mode.
-  if (options.mode !== undefined) {
-    fs.chmodSync(filename, options.mode);
+  if (mode !== undefined) {
+    fs.chmodSync(filename, mode);
   }
 }
 
@@ -29,14 +39,21 @@ export async function writeFileAtomic(
   data: string | Buffer,
   options: WriteFileAtomicOptions = {}
 ): Promise<void> {
+  let mode = options.mode;
+  if (mode === undefined) {
+    try {
+      const stat = await fs.promises.lstat(filename);
+      mode = stat.isFile() ? stat.mode : undefined;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
   const tmpfile = getTarget(filename, data);
-  await fs.promises.writeFile(
-    tmpfile,
-    data,
-    options.mode !== undefined ? { mode: options.mode } : undefined
-  );
+  await fs.promises.writeFile(tmpfile, data, mode !== undefined ? { mode } : undefined);
   await fs.promises.rename(tmpfile, filename);
-  if (options.mode !== undefined) {
-    await fs.promises.chmod(filename, options.mode);
+  if (mode !== undefined) {
+    await fs.promises.chmod(filename, mode);
   }
 }
